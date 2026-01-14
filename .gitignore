@@ -1,0 +1,9 @@
+# Ignore temporary/duplicate files that contain the @!!@ marker
+*@!!@*
+
+# macOS system files
+.DS_Store
+
+# Common extras (optional)
+#*~
+#*.tmp
