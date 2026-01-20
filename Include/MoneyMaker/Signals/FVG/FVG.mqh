@@ -1,9 +1,11 @@
+#ifndef __FVG_MQH__
+#define __FVG_MQH__
+
 //+------------------------------------------------------------------+
-//|                                                   FvgEA_Fixed.mq5|
-//|  Fixed-config EA that draws Fair Value Gaps like original Fvg.mq5|
+//|                                                   FVG.mqh        |
+//|  Fixed-config module that draws Fair Value Gaps like indicator   |
+//|  Call from main EA: FvgInit(); FvgTick(draw); FvgDeinit(draw);   |
 //+------------------------------------------------------------------+
-#property strict
-#property description "EA draws fair value gaps (FVG) rectangles like original indicator. Config is fixed in code (no inputs)."
 
 // types
 enum ENUM_BORDER_STYLE
@@ -34,10 +36,10 @@ const string OBJECT_PREFIX             = "FVG";
 const string OBJECT_PREFIX_CONTINUATED = OBJECT_PREFIX + "CNT";
 const string OBJECT_SEP                = "#";
 
-datetime g_lastBarTime = 0;
+static datetime g_lastBarTime = 0;
 
 //+------------------------------------------------------------------+
-bool IsNewBar()
+bool FvgIsNewBar()
 {
    datetime t = iTime(_Symbol, _Period, 0);
    if(t != g_lastBarTime)
@@ -50,8 +52,10 @@ bool IsNewBar()
 
 //+------------------------------------------------------------------+
 // EXACT naming scheme like original indicator
-void DrawBox(datetime leftDt, double leftPrice, datetime rightDt, double rightPrice, bool continuated)
+void FvgDrawBox(bool draw, datetime leftDt, double leftPrice, datetime rightDt, double rightPrice, bool continuated)
 {
+   if(!draw) return;
+
    string objName = (continuated ? OBJECT_PREFIX_CONTINUATED : OBJECT_PREFIX)
                     + OBJECT_SEP
                     + TimeToString(leftDt)
@@ -87,14 +91,16 @@ void DrawBox(datetime leftDt, double leftPrice, datetime rightDt, double rightPr
 }
 
 //+------------------------------------------------------------------+
-void ClearFvgObjects()
+void FvgClearObjects(bool draw)
 {
+   if(!draw) return;
+
    ObjectsDeleteAll(0, OBJECT_PREFIX);
    ObjectsDeleteAll(0, OBJECT_PREFIX_CONTINUATED);
 }
 
 //+------------------------------------------------------------------+
-void ScanAndDrawFVG()
+void FvgScanAndDraw(bool draw)
 {
    int bars = Bars(_Symbol, _Period);
    if(bars < 10) return;
@@ -109,7 +115,7 @@ void ScanAndDrawFVG()
    if(copied < 10) return;
 
    // redraw from scratch on each new bar -> clean like indicator
-   ClearFvgObjects();
+   FvgClearObjects(draw);
 
    int limit = copied - 3;
    if(limit < 1) return;
@@ -151,14 +157,14 @@ void ScanAndDrawFVG()
             }
 
             bool continuated = (rightTime == rates[0].time);
-            DrawBox(leftTime, leftHighPrice, rightTime, rightLowPrice, continuated);
+            FvgDrawBox(draw, leftTime, leftHighPrice, rightTime, rightLowPrice, continuated);
          }
          else
          {
             int rightIndex = MathMax(0, i + 2 - CFG_BoxLength);
             rightTime = rates[rightIndex].time;
 
-            DrawBox(leftTime, leftHighPrice, rightTime, rightLowPrice, false);
+            FvgDrawBox(draw, leftTime, leftHighPrice, rightTime, rightLowPrice, false);
          }
 
          continue;
@@ -186,46 +192,46 @@ void ScanAndDrawFVG()
             }
 
             bool continuated = (rightTime == rates[0].time);
-            DrawBox(leftTime, leftLowPrice, rightTime, rightHighPrice, continuated);
+            FvgDrawBox(draw, leftTime, leftLowPrice, rightTime, rightHighPrice, continuated);
          }
          else
          {
             int rightIndex = MathMax(0, i + 2 - CFG_BoxLength);
             rightTime = rates[rightIndex].time;
 
-            DrawBox(leftTime, leftLowPrice, rightTime, rightHighPrice, false);
+            FvgDrawBox(draw, leftTime, leftLowPrice, rightTime, rightHighPrice, false);
          }
 
          continue;
       }
    }
 
-   ChartRedraw(0);
+   if(draw)
+      ChartRedraw(0);
 }
 
 //+------------------------------------------------------------------+
-int OnInit()
+// Public API to call from main EA
+void FvgInit()
 {
    if(CFG_DebugEnabled)
-      Print("FvgEA_Fixed init");
+      Print("Fvg module init");
 
    g_lastBarTime = 0;
-   return INIT_SUCCEEDED;
 }
 
-//+------------------------------------------------------------------+
-void OnDeinit(const int reason)
+void FvgDeinit(bool draw)
 {
-   // Jeśli chcesz, żeby boxy zostały po zatrzymaniu EA, zakomentuj poniższą linię:
-   ClearFvgObjects();
+   // if you want boxes to stay, call with draw=false or comment next line
+   FvgClearObjects(draw);
 }
 
-//+------------------------------------------------------------------+
-void OnTick()
+void FvgTick(bool draw)
 {
-   if(!IsNewBar())
+   if(!FvgIsNewBar())
       return;
 
-   ScanAndDrawFVG();
+   FvgScanAndDraw(draw);
 }
-//+------------------------------------------------------------------+
+
+#endif // __FVG_MQH__
