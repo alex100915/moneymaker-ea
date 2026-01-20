@@ -5,6 +5,9 @@
 //|                                                   FVG.mqh        |
 //|  Fixed-config module that draws Fair Value Gaps like indicator   |
 //|  Call from main EA: FvgInit(); FvgTick(draw); FvgDeinit(draw);   |
+//|                                                                  |
+//|  EXTRA: FvgGetMostRecentFvgBar(outBarIndex,outDir)               |
+//|         -> finds the most recent (closest to present) FVG bar    |
 //+------------------------------------------------------------------+
 
 // types
@@ -100,6 +103,7 @@ void FvgClearObjects(bool draw)
 }
 
 //+------------------------------------------------------------------+
+// Core scan + optional draw (same as your fixed EA)
 void FvgScanAndDraw(bool draw)
 {
    int bars = Bars(_Symbol, _Period);
@@ -208,6 +212,65 @@ void FvgScanAndDraw(bool draw)
 
    if(draw)
       ChartRedraw(0);
+}
+
+//+------------------------------------------------------------------+
+// EXTRA: Find most recent FVG bar within scan window.
+// Returns: true if found.
+// outBarIndex = shift of the "right" candle (i in scan), i>=1 (1 = last closed).
+// outDir = 1 bullish, -1 bearish
+bool FvgGetMostRecentFvgBar(int &outBarIndex, int &outDir)
+{
+   outBarIndex = -1;
+   outDir = 0;
+
+   int bars = Bars(_Symbol, _Period);
+   if(bars < 10) return false;
+
+   int need = MathMin(CFG_ScanBars, bars);
+   if(need < 10) need = MathMin(300, bars);
+
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+
+   int copied = CopyRates(_Symbol, _Period, 0, need, rates);
+   if(copied < 10) return false;
+
+   int limit = copied - 3;
+   if(limit < 1) return false;
+
+   // Most recent => smallest i that matches
+   for(int i = 1; i <= limit; i++)
+   {
+      double rightHigh = rates[i].high;
+      double rightLow  = rates[i].low;
+      double midHigh   = rates[i+1].high;
+      double midLow    = rates[i+1].low;
+      double leftHigh  = rates[i+2].high;
+      double leftLow   = rates[i+2].low;
+
+      bool upLeft  = (midLow <= leftHigh && midLow > leftLow);
+      bool upRight = (midHigh >= rightLow && midHigh < rightHigh);
+      bool upGap   = (leftHigh < rightLow);
+      if(upLeft && upRight && upGap)
+      {
+         outBarIndex = i;
+         outDir = 1;
+         return true;
+      }
+
+      bool downLeft  = (midHigh >= leftLow && midHigh < leftHigh);
+      bool downRight = (midLow <= rightHigh && midLow > rightLow);
+      bool downGap   = (leftLow > rightHigh);
+      if(downLeft && downRight && downGap)
+      {
+         outBarIndex = i;
+         outDir = -1;
+         return true;
+      }
+   }
+
+   return false;
 }
 
 //+------------------------------------------------------------------+
