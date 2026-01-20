@@ -1,6 +1,7 @@
-#include <MoneyMaker/Signals/FVG/FVG.mqh>
 #property strict
-#property description "Entry EA: Uses FVG.mqh. Draws FVG optionally and draws permanent 0.618 labels on candle CLOSE of the most recent FVG candle."
+#property description "Entry EA: Uses FVG.mqh. Draws FVG optionally and draws permanent 0.618 labels on candle CLOSE of the most recent FVG candle. Test depends on FVG direction."
+
+#include "FVG.mqh"
 
 // Jedyny input (opcjonalny)
 input bool DrawFvg = true;   // rysuj boxy FVG (0.618 i tak zawsze będzie rysowane)
@@ -21,9 +22,9 @@ bool IsNewBarMain()
 }
 
 // Rysuje napis "0.618" na ZAMKNIĘCIU świecy z ostatnim wykrytym FVG.
-// 0.618 liczone OD GÓRY tej świecy.
-// Kolor: zielony jeśli Close >= level618, inaczej czerwony.
-// UWAGA: nazwa obiektu NIE może zaczynać się od "FVG", bo FVG.mqh kasuje prefix "FVG".
+// Warunek zależy od kierunku FVG (a nie od koloru świecy):
+// - bullish FVG: OK jeśli Close >= High - 0.618*(High-Low)
+// - bearish FVG: OK jeśli Close <= Low  + 0.618*(High-Low)
 void Draw618TextOnMostRecentFvgCandle_KeepHistory()
 {
    int fvgBar, fvgDir;
@@ -32,20 +33,29 @@ void Draw618TextOnMostRecentFvgCandle_KeepHistory()
 
    datetime t = iTime(_Symbol, _Period, fvgBar);
 
-   // nie duplikuj tej samej etykiety w kółko
+   // nie duplikuj tego samego wpisu w kółko
    if(t == g_lastLabeledFvgTime)
       return;
 
    double H = iHigh(_Symbol, _Period, fvgBar);
    double L = iLow(_Symbol, _Period, fvgBar);
    double C = iClose(_Symbol, _Period, fvgBar);
+
    if(H <= L) return;
 
-   // 0.618 od góry świecy
-   double level618 = H - 0.618 * (H - L);
-   bool ok = (C >= level618);
+   double range = H - L;
 
-   // !!! Prefix nie może być "FVG"
+   // progi 0.618
+   double levelFromTop    = H - 0.618 * range; // close ma być >= dla bullish FVG
+   double levelFromBottom = L + 0.618 * range; // close ma być <= dla bearish FVG
+
+   bool ok;
+   if(fvgDir >= 0) // bullish FVG
+      ok = (C >= levelFromTop);
+   else            // bearish FVG
+      ok = (C <= levelFromBottom);
+
+   // prefix NIE może zaczynać się od "FVG" (bo FVG.mqh kasuje "FVG*")
    string name = "C618#" + TimeToString(t);
 
    if(ObjectFind(0, name) >= 0)
@@ -54,7 +64,7 @@ void Draw618TextOnMostRecentFvgCandle_KeepHistory()
       return;
    }
 
-   // rysuj napis na CENIE ZAMKNIĘCIA (C)
+   // napis na CENIE ZAMKNIĘCIA świecy
    if(!ObjectCreate(0, name, OBJ_TEXT, 0, t, C))
    {
       Print("OBJ_TEXT create failed: ", GetLastError());
@@ -82,10 +92,10 @@ int OnInit()
 
 void OnDeinit(const int reason)
 {
-   // FVG boxy kasujemy tylko jeśli były rysowane (jak wcześniej)
+   // FVG boxy kasujemy tylko jeśli były rysowane
    FvgDeinit(DrawFvg);
 
-   // 0.618 etykiet NIE KASUJEMY
+   // 0.618 labeli NIE KASUJEMY
 }
 
 void OnTick()
