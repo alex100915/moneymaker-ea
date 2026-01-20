@@ -1,22 +1,23 @@
 //+------------------------------------------------------------------+
 //|                                                   FvgEA.mq5      |
-//|              EA version based on Fvg.mq5 (fair value gaps)       |
+//|     EA that draws Fair Value Gaps exactly like the Fvg.mq5       |
+//|     (visualization-friendly for Strategy Tester -> Visualize)    |
 //+------------------------------------------------------------------+
 #property strict
-#property description "EA draws fair value gaps (FVG) rectangles for Strategy Tester visualization."
+#property description "EA draws fair value gaps (FVG) rectangles like original indicator for Strategy Tester visualization."
 
 // types (same as indicator)
 enum ENUM_BORDER_STYLE
 {
-   BORDER_STYLE_SOLID = STYLE_SOLID,
-   BORDER_STYLE_DASH  = STYLE_DASH
+   BORDER_STYLE_SOLID = STYLE_SOLID, // Solid
+   BORDER_STYLE_DASH  = STYLE_DASH   // Dash
 };
 
-// config (same idea as indicator)
+// config (same as indicator)
 input group "Section :: Main";
 input bool InpContinueToMitigation = false; // Continue to mitigation
 input int  InpBoxLength            = 5;     // Fixed box length in bars (when mitigation disabled)
-input int  InpScanBars             = 500;   // How many recent bars to scan/draw (EA-only)
+input int  InpScanBars             = 600;   // How many recent bars to scan (EA-only; increase if needed)
 
 input group "Section :: Style";
 input color InpDownTrendColor = clrLightPink;  // Down trend color
@@ -50,10 +51,13 @@ bool IsNewBar()
 }
 
 //+------------------------------------------------------------------+
-//| Draws FVG box (same concept as indicator)                        |
+//| Draws FVG box (same naming scheme as indicator)                  |
 //+------------------------------------------------------------------+
 void DrawBox(datetime leftDt, double leftPrice, datetime rightDt, double rightPrice, bool continuated)
 {
+   // EXACT naming pattern from indicator:
+   // (continuated ? "FVGCNT" : "FVG") + "#" + TimeToString(leftDt) + "#" + DoubleToString(leftPrice)
+   // + "#" + TimeToString(rightDt) + "#" + DoubleToString(rightPrice)
    string objName = (continuated ? OBJECT_PREFIX_CONTINUATED : OBJECT_PREFIX)
                     + OBJECT_SEP
                     + TimeToString(leftDt)
@@ -89,77 +93,43 @@ void DrawBox(datetime leftDt, double leftPrice, datetime rightDt, double rightPr
 }
 
 //+------------------------------------------------------------------+
-//| Update continued boxes to mitigation                             |
+//| Delete all our objects (so no "trash leftovers")                 |
 //+------------------------------------------------------------------+
-void UpdateContinuedBoxes(const MqlRates &rates[])
+void ClearFvgObjects()
 {
-   // rates[] is series: rates[0] current, rates[1] last closed, etc.
-   int total = ObjectsTotal(0, 0, OBJ_RECTANGLE);
-   for(int i = 0; i < total; i++)
-   {
-      string objName = ObjectName(0, i, 0, OBJ_RECTANGLE);
-      if(StringFind(objName, OBJECT_PREFIX_CONTINUATED) != 0)
-         continue;
-
-      string parts[];
-      int n = StringSplit(objName, StringGetCharacter(OBJECT_SEP, 0), parts);
-      if(n < 5) // expected: PREFIX#leftTime#leftPrice#rightTime#rightPrice
-         continue;
-
-      datetime leftTime  = StringToTime(parts[1]);
-      double   leftPrice = StringToDouble(parts[2]);
-      datetime rightTime = rates[0].time;           // extend to current by default
-      double   rightPrice = StringToDouble(parts[4]); // fixed price border used in original code
-
-      // If "rightPrice" is inside last closed candle -> mitigate now, finalize box to that candle time
-      if(rightPrice < rates[1].high && rightPrice > rates[1].low)
-      {
-         rightTime = rates[1].time;
-
-         if(ObjectDelete(0, objName))
-         {
-            // redraw final (non-continued) box
-            DrawBox(leftTime, leftPrice, rightTime, rightPrice, false);
-         }
-      }
-      else
-      {
-         // move point 1 (right corner) to current time, same price
-         ObjectMove(0, objName, 1, rightTime, rightPrice);
-
-         if(InpDebugEnabled)
-            PrintFormat("Expand box %s", objName);
-      }
-   }
+   // Delete both prefixes
+   ObjectsDeleteAll(0, OBJECT_PREFIX);
+   ObjectsDeleteAll(0, OBJECT_PREFIX_CONTINUATED);
 }
 
 //+------------------------------------------------------------------+
-//| Scan recent bars and draw boxes                                  |
+//| Scan recent bars and draw boxes exactly like indicator           |
 //+------------------------------------------------------------------+
 void ScanAndDrawFVG()
 {
-   // Need enough bars
    int bars = Bars(_Symbol, _Period);
-   if(bars < 10)
-      return;
+   if(bars < 10) return;
 
    int need = MathMin(InpScanBars, bars);
-   if(need < 10) need = MathMin(200, bars);
+   if(need < 10) need = MathMin(300, bars);
 
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
 
    int copied = CopyRates(_Symbol, _Period, 0, need, rates);
-   if(copied < 10)
-      return;
+   if(copied < 10) return;
 
-   // Update continued boxes first (uses rates[0]/rates[1])
-   if(InpContinueToMitigation)
-      UpdateContinuedBoxes(rates);
+   // We redraw from scratch each new bar => clean output like indicator
+   ClearFvgObjects();
 
-   // We replicate indicator loop:
-   // for i=1 .. limit-1, we use bars i (right), i+1 (mid), i+2 (left)
-   int limit = copied - 3; // last usable i is copied-3
+   // Same idea as indicator loop:
+   // use i (right), i+1 (mid), i+2 (left), with i starting at 1
+   int limit = copied - 3; // last usable i
+   if(limit < 1) return;
+
+   if(InpDebugEnabled)
+      PrintFormat("Scan bars copied=%d limit=%d", copied, limit);
+
    for(int i = 1; i <= limit; i++)
    {
       double rightHighPrice = rates[i].high;
@@ -179,28 +149,31 @@ void ScanAndDrawFVG()
 
       if(upLeft && upRight && upGap)
       {
-         double top    = rightLowPrice;  // higher price of FVG box corner in original SetBuffers call
-         double bottom = leftHighPrice;
-
          if(InpContinueToMitigation)
          {
+            // Default: continue to current bar
             rightTime = rates[0].time;
-            // Search mitigation bar
+
+            // Search mitigation bar (same logic as indicator)
             for(int j = i - 1; j > 0; j--)
             {
-               if((rightLowPrice < rates[j].high && rightLowPrice >= rates[j].low) ||
-                  (leftHighPrice > rates[j].low && leftHighPrice <= rates[j].high))
+               if( (rightLowPrice < rates[j].high && rightLowPrice >= rates[j].low) ||
+                   (leftHighPrice > rates[j].low && leftHighPrice <= rates[j].high) )
                {
                   rightTime = rates[j].time;
                   break;
                }
             }
-            DrawBox(leftTime, leftHighPrice, rightTime, rightLowPrice, (rightTime == rates[0].time));
+
+            bool continuated = (rightTime == rates[0].time);
+            DrawBox(leftTime, leftHighPrice, rightTime, rightLowPrice, continuated);
          }
          else
          {
+            // Fixed length (same idea as indicator)
             int rightIndex = MathMax(0, i + 2 - InpBoxLength);
             rightTime = rates[rightIndex].time;
+
             DrawBox(leftTime, leftHighPrice, rightTime, rightLowPrice, false);
          }
 
@@ -217,28 +190,34 @@ void ScanAndDrawFVG()
          if(InpContinueToMitigation)
          {
             rightTime = rates[0].time;
-            // Search mitigation bar
+
+            // Search mitigation bar (same logic as indicator)
             for(int j = i - 1; j > 0; j--)
             {
-               if((rightHighPrice <= rates[j].high && rightHighPrice > rates[j].low) ||
-                  (leftLowPrice >= rates[j].low && leftLowPrice < rates[j].high))
+               if( (rightHighPrice <= rates[j].high && rightHighPrice > rates[j].low) ||
+                   (leftLowPrice >= rates[j].low && leftLowPrice < rates[j].high) )
                {
                   rightTime = rates[j].time;
                   break;
                }
             }
-            DrawBox(leftTime, leftLowPrice, rightTime, rightHighPrice, (rightTime == rates[0].time));
+
+            bool continuated = (rightTime == rates[0].time);
+            DrawBox(leftTime, leftLowPrice, rightTime, rightHighPrice, continuated);
          }
          else
          {
             int rightIndex = MathMax(0, i + 2 - InpBoxLength);
             rightTime = rates[rightIndex].time;
+
             DrawBox(leftTime, leftLowPrice, rightTime, rightHighPrice, false);
          }
 
          continue;
       }
    }
+
+   ChartRedraw(0);
 }
 
 //+------------------------------------------------------------------+
@@ -247,14 +226,10 @@ void ScanAndDrawFVG()
 int OnInit()
 {
    if(InpDebugEnabled)
-      Print("FvgEA initialization started");
+      Print("FvgEA init");
 
-   // Make sure chart redraws smoothly in visual tester
-   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, false);
-
-   if(InpDebugEnabled)
-      Print("FvgEA initialization finished");
-
+   // initialize last bar time to current bar so first tick draws immediately
+   g_lastBarTime = 0;
    return INIT_SUCCEEDED;
 }
 
@@ -264,27 +239,20 @@ int OnInit()
 void OnDeinit(const int reason)
 {
    if(InpDebugEnabled)
-      Print("FvgEA deinitialization started");
+      Print("FvgEA deinit");
 
-   // Delete our objects (both prefixes)
-   ObjectsDeleteAll(0, OBJECT_PREFIX);
-   ObjectsDeleteAll(0, OBJECT_PREFIX_CONTINUATED);
-
-   if(InpDebugEnabled)
-      Print("FvgEA deinitialization finished");
+   ClearFvgObjects();
 }
 
 //+------------------------------------------------------------------+
-//| Expert tick function                                             |
+//| Expert tick                                                      |
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // You can draw on every tick, but it's heavier.
-   // For Strategy Tester visualization, new bar is enough.
+   // For Visual Tester: draw once per new bar (clean + light)
    if(!IsNewBar())
       return;
 
    ScanAndDrawFVG();
-   ChartRedraw(0);
 }
 //+------------------------------------------------------------------+
