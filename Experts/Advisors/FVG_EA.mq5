@@ -1,43 +1,41 @@
 //+------------------------------------------------------------------+
-//|                                                   FvgEA.mq5      |
-//|     EA that draws Fair Value Gaps exactly like the Fvg.mq5       |
-//|     (visualization-friendly for Strategy Tester -> Visualize)    |
+//|                                                   FvgEA_Fixed.mq5|
+//|  Fixed-config EA that draws Fair Value Gaps like original Fvg.mq5|
 //+------------------------------------------------------------------+
 #property strict
-#property description "EA draws fair value gaps (FVG) rectangles like original indicator for Strategy Tester visualization."
+#property description "EA draws fair value gaps (FVG) rectangles like original indicator. Config is fixed in code (no inputs)."
 
-// types (same as indicator)
+// types
 enum ENUM_BORDER_STYLE
 {
-   BORDER_STYLE_SOLID = STYLE_SOLID, // Solid
-   BORDER_STYLE_DASH  = STYLE_DASH   // Dash
+   BORDER_STYLE_SOLID = STYLE_SOLID,
+   BORDER_STYLE_DASH  = STYLE_DASH
 };
 
-// config (same as indicator)
-input group "Section :: Main";
-input bool InpContinueToMitigation = false; // Continue to mitigation
-input int  InpBoxLength            = 5;     // Fixed box length in bars (when mitigation disabled)
-input int  InpScanBars             = 600;   // How many recent bars to scan (EA-only; increase if needed)
+// -------------------- FIXED CONFIG (edit here) --------------------
+// Main
+static const bool CFG_ContinueToMitigation = false; // true = extend until mitigation / current
+static const int  CFG_BoxLength            = 5;     // used only when mitigation disabled
+static const int  CFG_ScanBars             = 500;   // how many recent bars to scan
 
-input group "Section :: Style";
-input color InpDownTrendColor = clrLightPink;  // Down trend color
-input color InpUpTrendColor   = clrLightGreen; // Up trend color
-input bool  InpFill           = true;          // Fill solid (true) or transparent (false)
-input ENUM_BORDER_STYLE InpBoderStyle = BORDER_STYLE_SOLID; // Border line style
-input int   InpBorderWidth    = 2;             // Border line width
+// Style
+static const color CFG_DownTrendColor = clrLightPink;
+static const color CFG_UpTrendColor   = clrLightGreen;
+static const bool  CFG_Fill           = true;
+static const ENUM_BORDER_STYLE CFG_BorderStyle = BORDER_STYLE_SOLID;
+static const int   CFG_BorderWidth    = 2;
 
-input group "Section :: Dev";
-input bool InpDebugEnabled = false; // Enable debug (verbose logging)
+// Dev
+static const bool CFG_DebugEnabled = false;
+// ------------------------------------------------------------------
 
-// constants (same)
+// constants
 const string OBJECT_PREFIX             = "FVG";
 const string OBJECT_PREFIX_CONTINUATED = OBJECT_PREFIX + "CNT";
 const string OBJECT_SEP                = "#";
 
 datetime g_lastBarTime = 0;
 
-//+------------------------------------------------------------------+
-//| Utility: detect new bar                                          |
 //+------------------------------------------------------------------+
 bool IsNewBar()
 {
@@ -51,13 +49,9 @@ bool IsNewBar()
 }
 
 //+------------------------------------------------------------------+
-//| Draws FVG box (same naming scheme as indicator)                  |
-//+------------------------------------------------------------------+
+// EXACT naming scheme like original indicator
 void DrawBox(datetime leftDt, double leftPrice, datetime rightDt, double rightPrice, bool continuated)
 {
-   // EXACT naming pattern from indicator:
-   // (continuated ? "FVGCNT" : "FVG") + "#" + TimeToString(leftDt) + "#" + DoubleToString(leftPrice)
-   // + "#" + TimeToString(rightDt) + "#" + DoubleToString(rightPrice)
    string objName = (continuated ? OBJECT_PREFIX_CONTINUATED : OBJECT_PREFIX)
                     + OBJECT_SEP
                     + TimeToString(leftDt)
@@ -72,45 +66,40 @@ void DrawBox(datetime leftDt, double leftPrice, datetime rightDt, double rightPr
    {
       if(!ObjectCreate(0, objName, OBJ_RECTANGLE, 0, leftDt, leftPrice, rightDt, rightPrice))
       {
-         if(InpDebugEnabled)
+         if(CFG_DebugEnabled)
             PrintFormat("ObjectCreate failed for %s. Err=%d", objName, GetLastError());
          return;
       }
 
-      ObjectSetInteger(0, objName, OBJPROP_COLOR, leftPrice < rightPrice ? InpUpTrendColor : InpDownTrendColor);
-      ObjectSetInteger(0, objName, OBJPROP_FILL, InpFill);
-      ObjectSetInteger(0, objName, OBJPROP_STYLE, (int)InpBoderStyle);
-      ObjectSetInteger(0, objName, OBJPROP_WIDTH, InpBorderWidth);
+      ObjectSetInteger(0, objName, OBJPROP_COLOR, leftPrice < rightPrice ? CFG_UpTrendColor : CFG_DownTrendColor);
+      ObjectSetInteger(0, objName, OBJPROP_FILL,  CFG_Fill);
+      ObjectSetInteger(0, objName, OBJPROP_STYLE, (int)CFG_BorderStyle);
+      ObjectSetInteger(0, objName, OBJPROP_WIDTH, CFG_BorderWidth);
       ObjectSetInteger(0, objName, OBJPROP_BACK, true);
       ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, objName, OBJPROP_SELECTED, false);
       ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
       ObjectSetInteger(0, objName, OBJPROP_ZORDER, 0);
 
-      if(InpDebugEnabled)
+      if(CFG_DebugEnabled)
          PrintFormat("Draw box: %s", objName);
    }
 }
 
 //+------------------------------------------------------------------+
-//| Delete all our objects (so no "trash leftovers")                 |
-//+------------------------------------------------------------------+
 void ClearFvgObjects()
 {
-   // Delete both prefixes
    ObjectsDeleteAll(0, OBJECT_PREFIX);
    ObjectsDeleteAll(0, OBJECT_PREFIX_CONTINUATED);
 }
 
-//+------------------------------------------------------------------+
-//| Scan recent bars and draw boxes exactly like indicator           |
 //+------------------------------------------------------------------+
 void ScanAndDrawFVG()
 {
    int bars = Bars(_Symbol, _Period);
    if(bars < 10) return;
 
-   int need = MathMin(InpScanBars, bars);
+   int need = MathMin(CFG_ScanBars, bars);
    if(need < 10) need = MathMin(300, bars);
 
    MqlRates rates[];
@@ -119,15 +108,13 @@ void ScanAndDrawFVG()
    int copied = CopyRates(_Symbol, _Period, 0, need, rates);
    if(copied < 10) return;
 
-   // We redraw from scratch each new bar => clean output like indicator
+   // redraw from scratch on each new bar -> clean like indicator
    ClearFvgObjects();
 
-   // Same idea as indicator loop:
-   // use i (right), i+1 (mid), i+2 (left), with i starting at 1
-   int limit = copied - 3; // last usable i
+   int limit = copied - 3;
    if(limit < 1) return;
 
-   if(InpDebugEnabled)
+   if(CFG_DebugEnabled)
       PrintFormat("Scan bars copied=%d limit=%d", copied, limit);
 
    for(int i = 1; i <= limit; i++)
@@ -142,19 +129,17 @@ void ScanAndDrawFVG()
       datetime rightTime = rates[i].time;
       datetime leftTime  = rates[i+2].time;
 
-      // Up trend (same conditions)
+      // Up trend
       bool upLeft  = (midLowPrice <= leftHighPrice && midLowPrice > leftLowPrice);
       bool upRight = (midHighPrice >= rightLowPrice && midHighPrice < rightHighPrice);
       bool upGap   = (leftHighPrice < rightLowPrice);
 
       if(upLeft && upRight && upGap)
       {
-         if(InpContinueToMitigation)
+         if(CFG_ContinueToMitigation)
          {
-            // Default: continue to current bar
             rightTime = rates[0].time;
 
-            // Search mitigation bar (same logic as indicator)
             for(int j = i - 1; j > 0; j--)
             {
                if( (rightLowPrice < rates[j].high && rightLowPrice >= rates[j].low) ||
@@ -170,8 +155,7 @@ void ScanAndDrawFVG()
          }
          else
          {
-            // Fixed length (same idea as indicator)
-            int rightIndex = MathMax(0, i + 2 - InpBoxLength);
+            int rightIndex = MathMax(0, i + 2 - CFG_BoxLength);
             rightTime = rates[rightIndex].time;
 
             DrawBox(leftTime, leftHighPrice, rightTime, rightLowPrice, false);
@@ -180,18 +164,17 @@ void ScanAndDrawFVG()
          continue;
       }
 
-      // Down trend (same conditions)
+      // Down trend
       bool downLeft  = (midHighPrice >= leftLowPrice && midHighPrice < leftHighPrice);
       bool downRight = (midLowPrice <= rightHighPrice && midLowPrice > rightLowPrice);
       bool downGap   = (leftLowPrice > rightHighPrice);
 
       if(downLeft && downRight && downGap)
       {
-         if(InpContinueToMitigation)
+         if(CFG_ContinueToMitigation)
          {
             rightTime = rates[0].time;
 
-            // Search mitigation bar (same logic as indicator)
             for(int j = i - 1; j > 0; j--)
             {
                if( (rightHighPrice <= rates[j].high && rightHighPrice > rates[j].low) ||
@@ -207,7 +190,7 @@ void ScanAndDrawFVG()
          }
          else
          {
-            int rightIndex = MathMax(0, i + 2 - InpBoxLength);
+            int rightIndex = MathMax(0, i + 2 - CFG_BoxLength);
             rightTime = rates[rightIndex].time;
 
             DrawBox(leftTime, leftLowPrice, rightTime, rightHighPrice, false);
@@ -221,35 +204,25 @@ void ScanAndDrawFVG()
 }
 
 //+------------------------------------------------------------------+
-//| Expert initialization                                            |
-//+------------------------------------------------------------------+
 int OnInit()
 {
-   if(InpDebugEnabled)
-      Print("FvgEA init");
+   if(CFG_DebugEnabled)
+      Print("FvgEA_Fixed init");
 
-   // initialize last bar time to current bar so first tick draws immediately
    g_lastBarTime = 0;
    return INIT_SUCCEEDED;
 }
 
 //+------------------------------------------------------------------+
-//| Expert deinitialization                                          |
-//+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   if(InpDebugEnabled)
-      Print("FvgEA deinit");
-
+   // Jeśli chcesz, żeby boxy zostały po zatrzymaniu EA, zakomentuj poniższą linię:
    ClearFvgObjects();
 }
 
 //+------------------------------------------------------------------+
-//| Expert tick                                                      |
-//+------------------------------------------------------------------+
 void OnTick()
 {
-   // For Visual Tester: draw once per new bar (clean + light)
    if(!IsNewBar())
       return;
 
