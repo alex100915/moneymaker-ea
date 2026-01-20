@@ -1,7 +1,7 @@
 #ifndef IMPULSE123_COLOR_PIVOTS_MQH
 #define IMPULSE123_COLOR_PIVOTS_MQH
 
-#include <MoneyMaker/Signals/ImpulseTypes.mqh>
+#include <MoneyMaker/Signals/Impulse/ImpulseTypes.mqh>
 
 // anchors+extremes (jak opisałem): w stałym trendzie zawsze powstaje sekwencja H/L/H/L
 class CImpulse123ColorPivots

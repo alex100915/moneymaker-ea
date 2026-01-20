@@ -1,7 +1,7 @@
 #ifndef IMPULSE_DRAWER_MQH
 #define IMPULSE_DRAWER_MQH
 
-#include <MoneyMaker/Signals/ImpulseTypes.mqh>
+#include <MoneyMaker/Signals/Impulse/ImpulseTypes.mqh>
 
 // =====================================================
 // Drawer dla impulsu 1-2-3 (linie + etykiety)
