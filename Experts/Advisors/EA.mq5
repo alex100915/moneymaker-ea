@@ -1,10 +1,9 @@
+#include <MoneyMaker/Signals/FVG/FVG.mqh>
 #property strict
-#property description "Entry EA: Uses FVG.mqh. Draws FVG optionally and draws permanent 0.618 labels on candle CLOSE of the most recent FVG candle. Test depends on FVG direction."
-
-#include "FVG.mqh"
+#property description "Entry EA: Uses FVG.mqh. Draws FVG optionally and draws permanent 0.618 labels on the most recent FVG candle. 0.618 computed by FVG direction."
 
 // Jedyny input (opcjonalny)
-input bool DrawFvg = true;   // rysuj boxy FVG (0.618 i tak zawsze będzie rysowane)
+input bool DrawFvg = true;   // rysuj boxy FVG (label 0.618 i tak zawsze będzie rysowane)
 
 // wewnętrzne zmienne
 static datetime g_mainLastBarTime = 0;
@@ -21,16 +20,15 @@ bool IsNewBarMain()
    return false;
 }
 
-// Rysuje napis "0.618" na ZAMKNIĘCIU świecy z ostatnim wykrytym FVG.
-// Warunek zależy od kierunku FVG (a nie od koloru świecy):
-// - bullish FVG: OK jeśli Close >= High - 0.618*(High-Low)
-// - bearish FVG: OK jeśli Close <= Low  + 0.618*(High-Low)
+// FINAL: pozycja labela wg kierunku FVG (bullish nad, bearish pod),
+// kolor+symbol wg ok/fail, 0.618 liczone zgodnie z kierunkiem FVG.
 void Draw618TextOnMostRecentFvgCandle_KeepHistory()
 {
    int fvgBar, fvgDir;
    if(!FvgGetMostRecentFvgBar(fvgBar, fvgDir))
       return;
 
+   // "ostatnia świeca z FVG" = fvgBar (right candle z detekcji)
    datetime t = iTime(_Symbol, _Period, fvgBar);
 
    // nie duplikuj tego samego wpisu w kółko
@@ -45,36 +43,47 @@ void Draw618TextOnMostRecentFvgCandle_KeepHistory()
 
    double range = H - L;
 
-   // progi 0.618
-   double levelFromTop    = H - 0.618 * range; // close ma być >= dla bullish FVG
-   double levelFromBottom = L + 0.618 * range; // close ma być <= dla bearish FVG
+   // 0.618 zgodnie z kierunkiem ruchu (jak w Twoim opisie + zgodnie z fibo z platformy)
+   // bullish FVG: "close wysoko" => poziom 0.618 od dołu
+   // bearish FVG: "close nisko"  => poziom 0.618 od góry
+   double levelBull = L + 0.618 * range; // 0.618 (0->Low, 1->High)
+   double levelBear = H - 0.618 * range; // 0.618 (0->High, 1->Low)
 
-   bool ok;
-   if(fvgDir >= 0) // bullish FVG
-      ok = (C >= levelFromTop);
-   else            // bearish FVG
-      ok = (C <= levelFromBottom);
+   bool ok = (fvgDir >= 0) ? (C >= levelBull) : (C <= levelBear);
 
-   // prefix NIE może zaczynać się od "FVG" (bo FVG.mqh kasuje "FVG*")
+   // środek świecy w osi czasu
+   datetime tMid = t + (datetime)(PeriodSeconds(_Period) / 2);
+
+   // pionowy offset żeby nie siedziało na knocie
+   double offset = 25 * _Point;
+
+   // pozycja zależna od KIERUNKU FVG (nie od ok/fail)
+   double y = (fvgDir >= 0) ? (H + offset) : (L - offset);
+
+   // tekst i kolor zależne od ok/fail
+   string txt = ok ? "0.618 ✓" : "0.618 ✗";
+   color  col = ok ? clrLime : clrRed;
+
+   // prefix nie może zaczynać się od "FVG", bo moduł czyści "FVG*"
    string name = "C618#" + TimeToString(t);
 
+   // jeśli już istnieje (np. restart EA), nie dubluj
    if(ObjectFind(0, name) >= 0)
    {
       g_lastLabeledFvgTime = t;
       return;
    }
 
-   // napis na CENIE ZAMKNIĘCIA świecy
-   if(!ObjectCreate(0, name, OBJ_TEXT, 0, t, C))
+   if(!ObjectCreate(0, name, OBJ_TEXT, 0, tMid, y))
    {
       Print("OBJ_TEXT create failed: ", GetLastError());
       return;
    }
 
-   ObjectSetString(0, name, OBJPROP_TEXT, "0.618");
-   ObjectSetInteger(0, name, OBJPROP_COLOR, ok ? clrLime : clrRed);
+   ObjectSetString(0, name, OBJPROP_TEXT, txt);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, col);
    ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 10);
-   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_LEFT);
+   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_CENTER);
    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
    ObjectSetInteger(0, name, OBJPROP_BACK, false);
@@ -95,7 +104,7 @@ void OnDeinit(const int reason)
    // FVG boxy kasujemy tylko jeśli były rysowane
    FvgDeinit(DrawFvg);
 
-   // 0.618 labeli NIE KASUJEMY
+   // labeli 0.618 NIE kasujemy (historia zostaje)
 }
 
 void OnTick()
@@ -103,10 +112,10 @@ void OnTick()
    if(!IsNewBarMain())
       return;
 
-   // 1) FVG boxy (opcjonalnie)
+   // FVG boxy (opcjonalnie)
    FvgTick(DrawFvg);
 
-   // 2) 0.618 zawsze i zostaje na wykresie
+   // 0.618 (zostaje na wykresie)
    Draw618TextOnMostRecentFvgCandle_KeepHistory();
 
    ChartRedraw(0);
