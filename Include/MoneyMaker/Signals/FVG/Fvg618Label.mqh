@@ -35,7 +35,6 @@ bool Fvg618_EvaluateAndMaybeDraw(bool draw, int fvgBar, int fvgDir)
 
    if(!draw) return ok;
 
-   // nie dubluj
    if(t == g_fvg618_lastLabeledTime)
       return ok;
 
@@ -47,7 +46,7 @@ bool Fvg618_EvaluateAndMaybeDraw(bool draw, int fvgBar, int fvgDir)
    string txt = ok ? "0.618 ✓" : "0.618 ✗";
    color  col = ok ? clrLime : clrRed;
 
-   // prefix nie może zaczynać się od "FVG", bo FVG.mqh kasuje "FVG*"
+   // IMPORTANT: do not start with "FVG" (FVG module deletes "FVG*")
    string name = "C618#" + TimeToString(t);
 
    if(ObjectFind(0, name) >= 0)
@@ -57,10 +56,7 @@ bool Fvg618_EvaluateAndMaybeDraw(bool draw, int fvgBar, int fvgDir)
    }
 
    if(!ObjectCreate(0, name, OBJ_TEXT, 0, tMid, y))
-   {
-      Print("OBJ_TEXT create failed: ", GetLastError());
       return ok;
-   }
 
    ObjectSetString(0, name, OBJPROP_TEXT, txt);
    ObjectSetInteger(0, name, OBJPROP_COLOR, col);

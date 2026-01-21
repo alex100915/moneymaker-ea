@@ -1,5 +1,5 @@
 #property strict
-#property description "Entry EA: main orchestrator. 1) detect/draw FVG 2) if FVG -> evaluate+draw 0.618 label. One Draw param controls both."
+#property description "Entry EA: EVENT-STYLE FVG + 0.618. One Draw parameter controls both drawings."
 
 #include <MoneyMaker/Signals/FVG/FVG.mqh>
 #include <MoneyMaker/Signals/FVG/Fvg618Label.mqh>
@@ -15,23 +15,19 @@ int OnInit()
 
 void OnDeinit(const int reason)
 {
-   //FvgDeinit(Draw);
+   // Uncomment if you want to delete FVG rectangles when EA stops:
+   // FvgDeinit(Draw);
 }
 
 void OnTick()
 {
    int newBar, newDir;
-
-   // Jedno wywołanie: aktualizacja + ewentualnie nowy FVG
    bool hasNew = FvgTickAndGetNew(Draw, newBar, newDir);
 
-   // 0.618 tylko jeśli pojawił się NOWY FVG
    if(hasNew)
    {
       bool ok = Fvg618_EvaluateAndMaybeDraw(Draw, newBar, newDir);
-
-      // tutaj możesz użyć ok do entry
-      // if(ok) { ... }
+      // use 'ok' for entries
    }
 
    if(Draw)
