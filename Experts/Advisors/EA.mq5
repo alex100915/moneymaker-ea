@@ -4,53 +4,33 @@
 #include <MoneyMaker/Signals/FVG/FVG.mqh>
 #include <MoneyMaker/Signals/FVG/Fvg618Label.mqh>
 
-input bool Draw = true; // JEDEN parametr: steruje FVG + 0.618
-
-static datetime g_mainLastBarTime = 0;
-
-bool IsNewBarMain()
-{
-   datetime t = iTime(_Symbol, _Period, 0);
-   if(t != g_mainLastBarTime)
-   {
-      g_mainLastBarTime = t;
-      return true;
-   }
-   return false;
-}
+input bool Draw = true;
 
 int OnInit()
 {
    FvgInit();
    Fvg618_Init();
-   g_mainLastBarTime = 0;
    return INIT_SUCCEEDED;
 }
 
 void OnDeinit(const int reason)
 {
-   // FVG boxy: zgodnie z Draw
-   FvgDeinit(Draw);
-
-   // 0.618 labeli NIE kasujemy (zostają na wykresie)
+   //FvgDeinit(Draw);
 }
 
 void OnTick()
 {
-   if(!IsNewBarMain())
-      return;
+   int newBar, newDir;
 
-   // 1) FVG (logika + rysowanie zależne od Draw)
-   FvgTick(Draw);
+   // Jedno wywołanie: aktualizacja + ewentualnie nowy FVG
+   bool hasNew = FvgTickAndGetNew(Draw, newBar, newDir);
 
-   // 2) Główny moduł sprawdza czy jest FVG
-   int fvgBar, fvgDir;
-   if(FvgGetMostRecentFvgBar(fvgBar, fvgDir))
+   // 0.618 tylko jeśli pojawił się NOWY FVG
+   if(hasNew)
    {
-      // 3) Jeśli jest FVG, sprawdza 0.618 na tej świecy + opcjonalnie rysuje label (Draw)
-      bool ok = Fvg618_EvaluateAndMaybeDraw(Draw, fvgBar, fvgDir);
+      bool ok = Fvg618_EvaluateAndMaybeDraw(Draw, newBar, newDir);
 
-      // (opcjonalnie) możesz tu użyć 'ok' do logiki wejścia
+      // tutaj możesz użyć ok do entry
       // if(ok) { ... }
    }
 
