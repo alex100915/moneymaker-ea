@@ -4,7 +4,7 @@
 #include <MoneyMaker/Signals/FVG/FVG.mqh>
 #include <MoneyMaker/Signals/FVG/Fvg618Label.mqh>
 
-input bool Draw = true;
+input bool draw = true;
 
 int OnInit()
 {
@@ -21,15 +21,17 @@ void OnDeinit(const int reason)
 
 void OnTick()
 {
-   int newBar, newDir;
-   bool hasNew = FvgTickAndGetNew(Draw, newBar, newDir);
+   int barIndex;
+   ENUM_FVG_DIRECTION fvgDirection;
+   
+   bool newFvg = FvgProcess(barIndex, fvgDirection, draw);
 
-   if(hasNew)
+   if(newFvg)
    {
-      bool ok = Fvg618_EvaluateAndMaybeDraw(Draw, newBar, newDir);
+      bool ok = Fvg618Process(barIndex, fvgDirection, draw);
       // use 'ok' for entries
    }
 
-   if(Draw)
+   if(draw)
       ChartRedraw(0);
 }

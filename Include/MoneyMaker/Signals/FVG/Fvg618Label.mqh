@@ -1,73 +1,83 @@
 #ifndef __FVG618LABEL_MQH__
 #define __FVG618LABEL_MQH__
 
-static datetime g_fvg618_lastLabeledTime = 0;
+#include <MoneyMaker/Signals/FVG/FVG.mqh>
+
+// --- internal state (for de-dup / one label per candle) ---
+static datetime g_last618LabeledBarTime = 0;
 
 void Fvg618_Init()
 {
-   g_fvg618_lastLabeledTime = 0;
+   g_last618LabeledBarTime = 0;
 }
 
-// Zwraca: true=OK, false=FAIL. Rysuje tylko gdy draw=true.
-// Pozycja labela: bullish FVG nad świecą, bearish FVG pod świecą.
-// Kolor: OK zielony ✓, FAIL czerwony ✗.
-// 0.618 wg kierunku FVG:
-// bullish: level=Low+0.618*(H-L), ok jeśli Close>=level
-// bearish: level=High-0.618*(H-L), ok jeśli Close<=level
-bool Fvg618_EvaluateAndMaybeDraw(bool draw, int fvgBar, int fvgDir)
+bool Fvg618Process(const int barIndex, const ENUM_FVG_DIRECTION direction, bool draw)
 {
-   if(fvgBar < 0) return false;
+   const datetime barTime = iTime(_Symbol, _Period, barIndex);
 
-   datetime t = iTime(_Symbol, _Period, fvgBar);
-   if(t == 0) return false;
+   const double high  = iHigh(_Symbol, _Period, barIndex);
+   const double low   = iLow(_Symbol, _Period, barIndex);
+   const double close = iClose(_Symbol, _Period, barIndex);
 
-   double H = iHigh(_Symbol, _Period, fvgBar);
-   double L = iLow(_Symbol, _Period, fvgBar);
-   double C = iClose(_Symbol, _Period, fvgBar);
-   if(H <= L) return false;
+   const double range = high - low;
 
-   double range = H - L;
+   const double level = direction == FVG_BULLISH
+      ? (low  + 0.618 * range)      // bullish: from low upward
+      : (high - 0.618 * range);     // bearish: from high downward
 
-   double levelBull = L + 0.618 * range;
-   double levelBear = H - 0.618 * range;
+   const bool validSignal = direction == FVG_BULLISH
+      ? (close >= level)
+      : (close <= level);
 
-   bool ok = (fvgDir >= 0) ? (C >= levelBull) : (C <= levelBear);
+   if(draw)
+      Fvg618_DrawLabel(barIndex, barTime, direction, validSignal);
 
-   if(!draw) return ok;
+   return validSignal;
+}
 
-   if(t == g_fvg618_lastLabeledTime)
-      return ok;
-
-   datetime tMid = t + (datetime)(PeriodSeconds(_Period) / 2);
-
-   double offset = 25 * _Point;
-   double y = (fvgDir >= 0) ? (H + offset) : (L - offset);
-
-   string txt = ok ? "0.618 ✓" : "0.618 ✗";
-   color  col = ok ? clrLime : clrRed;
+// Draw ONLY (no evaluation). Caller decides whether to call this.
+bool Fvg618_DrawLabel(int barIndex, datetime barTime, ENUM_FVG_DIRECTION direction, bool validSignal)
+{
+   // de-dup: one label per candle time
+   if(barTime == g_last618LabeledBarTime)
+      return true;
 
    // IMPORTANT: do not start with "FVG" (FVG module deletes "FVG*")
-   string name = "C618#" + TimeToString(t);
+   const string objName = "C618#" + TimeToString(barTime);
 
-   if(ObjectFind(0, name) >= 0)
+   // already exists => treat as drawn
+   if(ObjectFind(0, objName) >= 0)
    {
-      g_fvg618_lastLabeledTime = t;
-      return ok;
+      g_last618LabeledBarTime = barTime;
+      return true;
    }
+   
+   const double high = iHigh(_Symbol, _Period, barIndex);
+   const double low  = iLow(_Symbol, _Period, barIndex);
+   if(high <= low) return false;
 
-   if(!ObjectCreate(0, name, OBJ_TEXT, 0, tMid, y))
-      return ok;
+   // place above/below candle, centered in time
+   const datetime midTime = barTime + (datetime)(PeriodSeconds(_Period) / 2);
 
-   ObjectSetString(0, name, OBJPROP_TEXT, txt);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, col);
-   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, 10);
-   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_CENTER);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
-   ObjectSetInteger(0, name, OBJPROP_BACK, false);
+   const double offset = 25 * _Point;
+   const double y = direction == FVG_BULLISH ? (high + offset) : (low - offset);
 
-   g_fvg618_lastLabeledTime = t;
-   return ok;
+   const string text = validSignal ? "0.618 ✓" : "0.618 ✗";
+   const color  col  = validSignal ? clrLime : clrRed;
+
+   if(!ObjectCreate(0, objName, OBJ_TEXT, 0, midTime, y))
+      return false;
+
+   ObjectSetString (0, objName, OBJPROP_TEXT, text);
+   ObjectSetInteger(0, objName, OBJPROP_COLOR, col);
+   ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, 10);
+   ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
+   ObjectSetInteger(0, objName, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
+   ObjectSetInteger(0, objName, OBJPROP_BACK, false);
+
+   g_last618LabeledBarTime = barTime;
+   return true;
 }
 
 #endif // __FVG618LABEL_MQH__

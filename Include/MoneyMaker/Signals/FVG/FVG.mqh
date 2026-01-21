@@ -1,12 +1,7 @@
 #ifndef __FVG_MQH__
 #define __FVG_MQH__
 
-// EVENT-STYLE incremental FVG
-// API:
-//   FvgInit();
-//   bool FvgTickAndGetNew(bool draw, int &outBar, int &outDir);
-//   void FvgDeinit(bool draw);
-
+// Config and constants
 static const bool  CFG_ContinueToMitigation = false; // extend until mitigation
 static const int   CFG_BoxLength            = 5;     // fixed length when mitigation disabled
 
@@ -23,6 +18,38 @@ const string OBJECT_SEP                = "#";
 static datetime g_lastBarTime = 0;
 static datetime g_lastReturnedNewFvgTime = 0;
 
+enum ENUM_FVG_DIRECTION
+{
+   FVG_NONE    = 0,
+   FVG_BULLISH = 1,
+   FVG_BEARISH = -1
+};
+
+void FvgInit()
+{
+   g_lastBarTime = 0;
+   g_lastReturnedNewFvgTime = 0;
+}
+
+bool FvgProcess(int &outBarIndex, ENUM_FVG_DIRECTION &outFvgDirection, bool draw)
+{
+   outBarIndex = -1;
+   outFvgDirection = FVG_NONE;
+
+   if(!FvgIsNewBar())
+      return false;
+
+   FvgUpdateContinuatedBoxes(draw);
+
+   if(FvgDetectNewOnLastClosedBar(outBarIndex, outFvgDirection))
+   {
+      FvgDraw(draw, outFvgDirection);
+      return true;
+   }
+
+   return false;
+}
+
 bool FvgIsNewBar()
 {
    datetime t = iTime(_Symbol, _Period, 0);
@@ -34,17 +61,109 @@ bool FvgIsNewBar()
    return false;
 }
 
-void FvgApplyRectStyle(const string name, const double leftPrice, const double rightPrice)
+bool FvgDetectNewOnLastClosedBar(int &outBarIndex, ENUM_FVG_DIRECTION &outFvgDirection)
 {
-   ObjectSetInteger(0, name, OBJPROP_COLOR, leftPrice < rightPrice ? CFG_UpTrendColor : CFG_DownTrendColor);
-   ObjectSetInteger(0, name, OBJPROP_FILL,  CFG_Fill);
-   ObjectSetInteger(0, name, OBJPROP_STYLE, CFG_BorderStyle);
-   ObjectSetInteger(0, name, OBJPROP_WIDTH, CFG_BorderWidth);
-   ObjectSetInteger(0, name, OBJPROP_BACK, true);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
-   ObjectSetInteger(0, name, OBJPROP_ZORDER, 0);
+   if(Bars(_Symbol, _Period) < 5)
+      return false;
+
+   const int i = 1;
+
+   double rightHigh = iHigh(_Symbol, _Period, i);
+   double rightLow  = iLow(_Symbol, _Period, i);
+   double midHigh   = iHigh(_Symbol, _Period, i+1);
+   double midLow    = iLow(_Symbol, _Period, i+1);
+   double leftHigh  = iHigh(_Symbol, _Period, i+2);
+   double leftLow   = iLow(_Symbol, _Period, i+2);
+
+   datetime tRight = iTime(_Symbol, _Period, i);
+   if(tRight == 0)
+      return false;
+
+   bool upLeft  = (midLow <= leftHigh && midLow > leftLow);
+   bool upRight = (midHigh >= rightLow && midHigh < rightHigh);
+   bool upGap   = (leftHigh < rightLow);
+
+   if(upLeft && upRight && upGap)
+   {
+      if(tRight == g_lastReturnedNewFvgTime)
+         return false;
+
+      g_lastReturnedNewFvgTime = tRight;
+
+      outBarIndex = i;
+      outFvgDirection = FVG_BULLISH;
+      return true;
+   }
+
+   bool downLeft  = (midHigh >= leftLow && midHigh < leftHigh);
+   bool downRight = (midLow <= rightHigh && midLow > rightLow);
+   bool downGap   = (leftLow > rightHigh);
+
+   if(downLeft && downRight && downGap)
+   {
+      if(tRight == g_lastReturnedNewFvgTime)
+         return false;
+
+      g_lastReturnedNewFvgTime = tRight;
+
+      outBarIndex = i;
+      outFvgDirection = FVG_BEARISH;
+      return true;
+   }
+
+   return false;
+}
+
+// Starting from the last closed bar (index 1), draw FVG box
+// Currently formed bar has index 0
+void FvgDraw(bool draw, ENUM_FVG_DIRECTION fvgDirection)
+{
+   if(!draw) return;
+
+   const int i = 1;
+
+   datetime leftTime = iTime(_Symbol, _Period, i+2);
+
+   double rightHigh = iHigh(_Symbol, _Period, i);
+   double rightLow  = iLow(_Symbol, _Period, i);
+   double leftHigh  = iHigh(_Symbol, _Period, i+2);
+   double leftLow   = iLow(_Symbol, _Period, i+2);
+
+   if(fvgDirection == FVG_BULLISH)
+   {
+      double leftPrice  = leftHigh;
+      double rightPrice = rightLow;
+
+      if(CFG_ContinueToMitigation)
+      {
+         FvgDrawBoxContinuated(draw, leftTime, leftPrice, rightPrice);
+      }
+      else
+      {
+         int rightIndex = MathMax(0, (i+2) - CFG_BoxLength);
+         datetime endTime = iTime(_Symbol, _Period, rightIndex);
+         FvgDrawBoxFixed(draw, leftTime, leftPrice, endTime, rightPrice);
+      }
+      return;
+   }
+
+   if(fvgDirection == FVG_BEARISH)
+   {
+      double leftPrice  = leftLow;
+      double rightPrice = rightHigh;
+
+      if(CFG_ContinueToMitigation)
+      {
+         FvgDrawBoxContinuated(draw, leftTime, leftPrice, rightPrice);
+      }
+      else
+      {
+         int rightIndex = MathMax(0, (i+2) - CFG_BoxLength);
+         datetime endTime = iTime(_Symbol, _Period, rightIndex);
+         FvgDrawBoxFixed(draw, leftTime, leftPrice, endTime, rightPrice);
+      }
+      return;
+   }
 }
 
 void FvgDrawBoxFixed(bool draw, datetime leftDt, double leftPrice, datetime rightDt, double rightPrice)
@@ -118,7 +237,7 @@ void FvgUpdateContinuatedBoxes(bool draw)
       if(mitigated)
       {
          ObjectDelete(0, objName);
-         FvgDrawBoxFixed(true, leftDt, leftPrice, t1, rightPrice);
+         FvgDrawBoxFixed(draw, leftDt, leftPrice, t1, rightPrice);
       }
       else
       {
@@ -127,111 +246,17 @@ void FvgUpdateContinuatedBoxes(bool draw)
    }
 }
 
-bool FvgDetectNewOnLastClosedBar(int &outBarIndex, int &outDir)
+void FvgApplyRectStyle(const string name, const double leftPrice, const double rightPrice)
 {
-   outBarIndex = -1;
-   outDir = 0;
-
-   if(Bars(_Symbol, _Period) < 5)
-      return false;
-
-   const int i = 1;
-
-   double rightHigh = iHigh(_Symbol, _Period, i);
-   double rightLow  = iLow(_Symbol, _Period, i);
-   double midHigh   = iHigh(_Symbol, _Period, i+1);
-   double midLow    = iLow(_Symbol, _Period, i+1);
-   double leftHigh  = iHigh(_Symbol, _Period, i+2);
-   double leftLow   = iLow(_Symbol, _Period, i+2);
-
-   datetime tRight = iTime(_Symbol, _Period, i);
-   if(tRight == 0) return false;
-
-   bool upLeft  = (midLow <= leftHigh && midLow > leftLow);
-   bool upRight = (midHigh >= rightLow && midHigh < rightHigh);
-   bool upGap   = (leftHigh < rightLow);
-
-   if(upLeft && upRight && upGap)
-   {
-      if(tRight == g_lastReturnedNewFvgTime) return false;
-      g_lastReturnedNewFvgTime = tRight;
-
-      outBarIndex = i;
-      outDir = 1;
-      return true;
-   }
-
-   bool downLeft  = (midHigh >= leftLow && midHigh < leftHigh);
-   bool downRight = (midLow <= rightHigh && midLow > rightLow);
-   bool downGap   = (leftLow > rightHigh);
-
-   if(downLeft && downRight && downGap)
-   {
-      if(tRight == g_lastReturnedNewFvgTime) return false;
-      g_lastReturnedNewFvgTime = tRight;
-
-      outBarIndex = i;
-      outDir = -1;
-      return true;
-   }
-
-   return false;
-}
-
-void FvgDrawNewFromBar1(bool draw, int fvgDir)
-{
-   if(!draw) return;
-
-   const int i = 1;
-
-   datetime leftTime = iTime(_Symbol, _Period, i+2);
-
-   double rightHigh = iHigh(_Symbol, _Period, i);
-   double rightLow  = iLow(_Symbol, _Period, i);
-   double leftHigh  = iHigh(_Symbol, _Period, i+2);
-   double leftLow   = iLow(_Symbol, _Period, i+2);
-
-   if(fvgDir > 0)
-   {
-      double leftPrice  = leftHigh;
-      double rightPrice = rightLow;
-
-      if(CFG_ContinueToMitigation)
-      {
-         FvgDrawBoxContinuated(true, leftTime, leftPrice, rightPrice);
-      }
-      else
-      {
-         int rightIndex = MathMax(0, (i+2) - CFG_BoxLength);
-         datetime endTime = iTime(_Symbol, _Period, rightIndex);
-         FvgDrawBoxFixed(true, leftTime, leftPrice, endTime, rightPrice);
-      }
-      return;
-   }
-
-   if(fvgDir < 0)
-   {
-      double leftPrice  = leftLow;
-      double rightPrice = rightHigh;
-
-      if(CFG_ContinueToMitigation)
-      {
-         FvgDrawBoxContinuated(true, leftTime, leftPrice, rightPrice);
-      }
-      else
-      {
-         int rightIndex = MathMax(0, (i+2) - CFG_BoxLength);
-         datetime endTime = iTime(_Symbol, _Period, rightIndex);
-         FvgDrawBoxFixed(true, leftTime, leftPrice, endTime, rightPrice);
-      }
-      return;
-   }
-}
-
-void FvgInit()
-{
-   g_lastBarTime = 0;
-   g_lastReturnedNewFvgTime = 0;
+   ObjectSetInteger(0, name, OBJPROP_COLOR, leftPrice < rightPrice ? CFG_UpTrendColor : CFG_DownTrendColor);
+   ObjectSetInteger(0, name, OBJPROP_FILL,  CFG_Fill);
+   ObjectSetInteger(0, name, OBJPROP_STYLE, CFG_BorderStyle);
+   ObjectSetInteger(0, name, OBJPROP_WIDTH, CFG_BorderWidth);
+   ObjectSetInteger(0, name, OBJPROP_BACK, true);
+   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
+   ObjectSetInteger(0, name, OBJPROP_ZORDER, 0);
 }
 
 void FvgDeinit(bool draw)
@@ -239,29 +264,6 @@ void FvgDeinit(bool draw)
    if(!draw) return;
    ObjectsDeleteAll(0, OBJECT_PREFIX);
    ObjectsDeleteAll(0, OBJECT_PREFIX_CONTINUATED);
-}
-
-bool FvgTickAndGetNew(bool draw, int &outBar, int &outDir)
-{
-   outBar = -1;
-   outDir = 0;
-
-   if(!FvgIsNewBar())
-      return false;
-
-   FvgUpdateContinuatedBoxes(draw);
-
-   int bar, dir;
-   if(FvgDetectNewOnLastClosedBar(bar, dir))
-   {
-      FvgDrawNewFromBar1(draw, dir);
-
-      outBar = bar;
-      outDir = dir;
-      return true;
-   }
-
-   return false;
 }
 
 #endif // __FVG_MQH__
