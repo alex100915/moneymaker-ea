@@ -1,59 +1,37 @@
 #property strict
-#property description "Entry EA: main orchestrator. 1) detect/draw FVG 2) if FVG -> evaluate+draw 0.618 label. One Draw param controls both."
+#property description "Entry EA: EVENT-STYLE FVG + 0.618. One Draw parameter controls both drawings."
 
 #include <MoneyMaker/Signals/FVG/FVG.mqh>
 #include <MoneyMaker/Signals/FVG/Fvg618Label.mqh>
 
-input bool Draw = true; // JEDEN parametr: steruje FVG + 0.618
-
-static datetime g_mainLastBarTime = 0;
-
-bool IsNewBarMain()
-{
-   datetime t = iTime(_Symbol, _Period, 0);
-   if(t != g_mainLastBarTime)
-   {
-      g_mainLastBarTime = t;
-      return true;
-   }
-   return false;
-}
+input bool draw = true;
 
 int OnInit()
 {
    FvgInit();
    Fvg618_Init();
-   g_mainLastBarTime = 0;
    return INIT_SUCCEEDED;
 }
 
 void OnDeinit(const int reason)
 {
-   // FVG boxy: zgodnie z Draw
-   FvgDeinit(Draw);
-
-   // 0.618 labeli NIE kasujemy (zostają na wykresie)
+   // Uncomment if you want to delete FVG rectangles when EA stops:
+   // FvgDeinit(Draw);
 }
 
 void OnTick()
 {
-   if(!IsNewBarMain())
-      return;
+   int barIndex;
+   ENUM_FVG_DIRECTION fvgDirection;
+   
+   bool newFvg = FvgProcess(barIndex, fvgDirection, draw);
 
-   // 1) FVG (logika + rysowanie zależne od Draw)
-   FvgTick(Draw);
-
-   // 2) Główny moduł sprawdza czy jest FVG
-   int fvgBar, fvgDir;
-   if(FvgGetMostRecentFvgBar(fvgBar, fvgDir))
+   if(newFvg)
    {
-      // 3) Jeśli jest FVG, sprawdza 0.618 na tej świecy + opcjonalnie rysuje label (Draw)
-      bool ok = Fvg618_EvaluateAndMaybeDraw(Draw, fvgBar, fvgDir);
-
-      // (opcjonalnie) możesz tu użyć 'ok' do logiki wejścia
-      // if(ok) { ... }
+      bool ok = Fvg618Process(barIndex, fvgDirection, draw);
+      // use 'ok' for entries
    }
 
-   if(Draw)
+   if(draw)
       ChartRedraw(0);
 }
