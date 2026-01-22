@@ -213,10 +213,10 @@ void FvgUpdateContinuatedBoxes(bool draw)
    int total = ObjectsTotal(0, 0, OBJ_RECTANGLE);
    if(total <= 0) return;
 
-   double h1 = iHigh(_Symbol, _Period, 1);
-   double l1 = iLow(_Symbol, _Period, 1);
-   datetime t1 = iTime(_Symbol, _Period, 1);
-   datetime t0 = iTime(_Symbol, _Period, 0);
+   // last closed bar data
+   const double c1 = iClose(_Symbol, _Period, 1);
+   const datetime t1 = iTime(_Symbol, _Period, 1);
+   const datetime t0 = iTime(_Symbol, _Period, 0);
 
    for(int idx = total - 1; idx >= 0; --idx)
    {
@@ -224,6 +224,7 @@ void FvgUpdateContinuatedBoxes(bool draw)
       if(StringFind(objName, OBJECT_PREFIX_CONTINUATED) != 0)
          continue;
 
+      // parse name: FVGCNT#<leftDtLong>#<leftPrice>#<rightPrice>
       string parts[];
       int n = StringSplit(objName, StringGetCharacter(OBJECT_SEP, 0), parts);
       if(n < 4) continue;
@@ -232,7 +233,11 @@ void FvgUpdateContinuatedBoxes(bool draw)
       double leftPrice  = StringToDouble(parts[2]);
       double rightPrice = StringToDouble(parts[3]);
 
-      bool mitigated = (rightPrice < h1 && rightPrice > l1);
+      // Mitigation ONLY if CLOSE of candle[1] is inside the FVG zone
+      double zoneLow  = MathMin(leftPrice, rightPrice);
+      double zoneHigh = MathMax(leftPrice, rightPrice);
+
+      bool mitigated = (c1 >= zoneLow && c1 <= zoneHigh);
 
       if(mitigated)
       {
@@ -241,6 +246,7 @@ void FvgUpdateContinuatedBoxes(bool draw)
       }
       else
       {
+         // extend to current bar time
          ObjectMove(0, objName, 1, t0, rightPrice);
       }
    }
