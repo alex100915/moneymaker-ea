@@ -3,72 +3,49 @@
 
 #include <MoneyMaker/Signals/FVG/FVG.mqh>
 
-// --- internal state (for de-dup / one label per candle) ---
-static datetime g_last618LabeledBarTime = 0;
-
-void Fvg618_Init()
+bool Fvg618_IsValid618Bar(const FVG_DIRECTION fvgDirection)
 {
-   g_last618LabeledBarTime = 0;
-}
+   const datetime lastClosedBarTime = iTime(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
 
-bool Fvg618Process(const int barIndex, const ENUM_FVG_DIRECTION direction, bool draw)
-{
-   const datetime barTime = iTime(_Symbol, _Period, barIndex);
-
-   const double high  = iHigh(_Symbol, _Period, barIndex);
-   const double low   = iLow(_Symbol, _Period, barIndex);
-   const double close = iClose(_Symbol, _Period, barIndex);
+   const double high  = iHigh(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
+   const double low   = iLow(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
+   const double close = iClose(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
 
    const double range = high - low;
 
-   const double level = direction == FVG_BULLISH
+   const double level = fvgDirection == FVG_BULLISH
       ? (low  + 0.618 * range)      // bullish: from low upward
       : (high - 0.618 * range);     // bearish: from high downward
 
-   const bool validSignal = direction == FVG_BULLISH
+   const bool valid618Bar = fvgDirection == FVG_BULLISH
       ? (close >= level)
       : (close <= level);
 
-   if(draw)
-      Fvg618_DrawLabel(barIndex, barTime, direction, validSignal);
-
-   return validSignal;
+   return valid618Bar;
 }
 
-// Draw ONLY (no evaluation). Caller decides whether to call this.
-bool Fvg618_DrawLabel(int barIndex, datetime barTime, ENUM_FVG_DIRECTION direction, bool validSignal)
+bool Fvg618DrawLabel(FVG_DIRECTION fvgDirection, bool valid618Bar)
 {
-   // de-dup: one label per candle time
-   if(barTime == g_last618LabeledBarTime)
-      return true;
+   const datetime lastClosedBarTime = iTime(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
 
-   // IMPORTANT: do not start with "FVG" (FVG module deletes "FVG*")
-   const string objName = "C618#" + TimeToString(barTime);
-
-   // already exists => treat as drawn
-   if(ObjectFind(0, objName) >= 0)
-   {
-      g_last618LabeledBarTime = barTime;
-      return true;
-   }
+   const string objName = "C618#" + TimeToString(lastClosedBarTime);
    
-   const double high = iHigh(_Symbol, _Period, barIndex);
-   const double low  = iLow(_Symbol, _Period, barIndex);
-   if(high <= low) return false;
+   const double barHigh = iHigh(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
+   const double barLow  = iLow(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
 
    // place above/below candle, centered in time
-   const datetime midTime = barTime + (datetime)(PeriodSeconds(_Period) / 2);
+   const datetime midTime = lastClosedBarTime + (datetime)(PeriodSeconds(_Period) / 2);
 
    const double offset = 25 * _Point;
-   const double y = direction == FVG_BULLISH ? (high + offset) : (low - offset);
+   const double labelPositionY = fvgDirection == FVG_BULLISH ? (barHigh + offset) : (barLow - offset);
 
-   const string text = validSignal ? "0.618 ✓" : "0.618 ✗";
-   const color  col  = validSignal ? clrLime : clrRed;
+   const string label = valid618Bar ? "0.618 ✓" : "0.618 ✗";
+   const color  col  = valid618Bar ? clrLime : clrRed;
 
-   if(!ObjectCreate(0, objName, OBJ_TEXT, 0, midTime, y))
+   if(!ObjectCreate(0, objName, OBJ_TEXT, 0, midTime, labelPositionY))
       return false;
 
-   ObjectSetString (0, objName, OBJPROP_TEXT, text);
+   ObjectSetString (0, objName, OBJPROP_TEXT, label);
    ObjectSetInteger(0, objName, OBJPROP_COLOR, col);
    ObjectSetInteger(0, objName, OBJPROP_FONTSIZE, 10);
    ObjectSetInteger(0, objName, OBJPROP_ANCHOR, ANCHOR_CENTER);
@@ -76,7 +53,6 @@ bool Fvg618_DrawLabel(int barIndex, datetime barTime, ENUM_FVG_DIRECTION directi
    ObjectSetInteger(0, objName, OBJPROP_HIDDEN, false);
    ObjectSetInteger(0, objName, OBJPROP_BACK, false);
 
-   g_last618LabeledBarTime = barTime;
    return true;
 }
 
