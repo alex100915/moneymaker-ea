@@ -1,7 +1,7 @@
 #ifndef __FVG618_MQH__
 #define __FVG618_MQH__
 
-#include <MoneyMaker/Signals/FVG/FVG.mqh>
+#include "FvgTypes.mqh"
 
 bool Fvg618_IsValid618Bar(const FVG_DIRECTION fvgDirection)
 {

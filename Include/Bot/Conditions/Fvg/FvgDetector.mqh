@@ -5,13 +5,13 @@
 
 static const int CFG_BoxLength = 10;
 
-FvgDetectionResult Fvg_Detect()
+FvgDetectionResult FvgDetector_Detect()
 {
    FvgDetectionResult result = {};
 
-   FvgBarData barData = Fvg_GetBarData(LAST_CLOSED_BAR_INDEX);
+   FvgBarData barData = FvgDetector_GetBarData(LAST_CLOSED_BAR_INDEX);
 
-   FVG_DIRECTION detectedDirection = Fvg_DetectDirection(barData);
+   FVG_DIRECTION detectedDirection = FvgDetector_DetectDirection(barData);
    
    if(detectedDirection == FVG_NONE)
       return result;
@@ -24,7 +24,7 @@ FvgDetectionResult Fvg_Detect()
    return result;
 }
 
-FvgBarData Fvg_GetBarData(int lastClosedBarIndex)
+FvgBarData FvgDetector_GetBarData(int lastClosedBarIndex)
 {
    FvgBarData barData;
    barData.rightBarHigh = iHigh(_Symbol, _Period, lastClosedBarIndex);
@@ -37,18 +37,18 @@ FvgBarData Fvg_GetBarData(int lastClosedBarIndex)
    return barData;
 }
 
-FVG_DIRECTION Fvg_DetectDirection(const FvgBarData &barData)
+FVG_DIRECTION FvgDetector_DetectDirection(const FvgBarData &barData)
 {
-   if(Fvg_CheckBullishPattern(barData))
+   if(FvgDetector_CheckBullishPattern(barData))
       return FVG_BULLISH;
    
-   if(Fvg_CheckBearishPattern(barData))
+   if(FvgDetector_CheckBearishPattern(barData))
       return FVG_BEARISH;
    
    return FVG_NONE;
 }
 
-bool Fvg_CheckBullishPattern(const FvgBarData &barData)
+bool FvgDetector_CheckBullishPattern(const FvgBarData &barData)
 {
    bool midBarConnectsToLeft  = (barData.midBarLow <= barData.leftBarHigh && barData.midBarLow > barData.leftBarLow);
    bool midBarConnectsToRight = (barData.midBarHigh >= barData.rightBarLow && barData.midBarHigh < barData.rightBarHigh);
@@ -57,7 +57,7 @@ bool Fvg_CheckBullishPattern(const FvgBarData &barData)
    return midBarConnectsToLeft && midBarConnectsToRight && gapExistsBetweenBars;
 }
 
-bool Fvg_CheckBearishPattern(const FvgBarData &barData)
+bool FvgDetector_CheckBearishPattern(const FvgBarData &barData)
 {
    bool midBarConnectsToLeft  = (barData.midBarHigh >= barData.leftBarLow && barData.midBarHigh < barData.leftBarHigh);
    bool midBarConnectsToRight = (barData.midBarLow <= barData.rightBarHigh && barData.midBarLow > barData.rightBarLow);
@@ -66,7 +66,7 @@ bool Fvg_CheckBearishPattern(const FvgBarData &barData)
    return midBarConnectsToLeft && midBarConnectsToRight && gapExistsBetweenBars;
 }
 
-bool Fvg_CheckMitigation(FVG_DIRECTION direction, double zoneLow, double zoneHigh)
+bool FvgDetector_CheckMitigation(FVG_DIRECTION direction, double zoneLow, double zoneHigh)
 {
    const double lastClosedBarPrice = iClose(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
    
@@ -84,7 +84,7 @@ bool Fvg_CheckMitigation(FVG_DIRECTION direction, double zoneLow, double zoneHig
    return false;
 }
 
-void Fvg_Draw(const FvgDetectionResult &result)
+void FvgDetector_Draw(const FvgDetectionResult &result)
 {
    datetime leftBarTime = iTime(_Symbol, _Period, LAST_CLOSED_BAR_INDEX+2);
    
@@ -95,6 +95,9 @@ void Fvg_Draw(const FvgDetectionResult &result)
                     + "#" + DoubleToString(result.zoneLow, _Digits)
                     + "#" + TimeToString(endTime)
                     + "#" + DoubleToString(result.zoneHigh, _Digits);
+
+   if(!ObjectCreate(0, objName, OBJ_RECTANGLE, 0, leftBarTime, result.zoneLow, endTime, result.zoneHigh))
+      return;
 
    ObjectSetInteger(0, objName, OBJPROP_COLOR, result.direction == FVG_BULLISH ? clrLightGreen : clrLightPink);
    ObjectSetInteger(0, objName, OBJPROP_FILL, true);
@@ -107,7 +110,7 @@ void Fvg_Draw(const FvgDetectionResult &result)
    ObjectSetInteger(0, objName, OBJPROP_ZORDER, 0);
 }
 
-void Fvg_DrawMitigatedLabel(FVG_DIRECTION fvgDirection)
+void FvgDetector_DrawMitigatedLabel(FVG_DIRECTION fvgDirection)
 {
    const datetime lastClosedBarTime = iTime(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
    

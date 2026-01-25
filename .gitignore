@@ -8,6 +8,6 @@
 #*~
 #*.tmp
 Experts/Advisors/moneymaker.mq5
-Include/MoneyMaker/Chart/
-Include/MoneyMaker/Infra/
-Include/MoneyMaker/Conditions/Impulse/
+Include/Bot/Chart/
+Include/Bot/Infra/
+Include/Bot/Conditions/Impulse/
