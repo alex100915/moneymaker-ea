@@ -1,7 +1,7 @@
 #property strict
 #property description "Entry EA: EVENT-STYLE FVG + 0.618 system. One Draw parameter controls drawings."
 
-#include <MoneyMaker/Signals/FVG/FvgSystem.mqh>
+#include <Bot/Conditions/Fvg/FvgSystem.mqh>
 
 const int LAST_CLOSED_BAR_INDEX = 1;  // MT5: index 0 = currently forming bar, index 1 = last closed bar
 

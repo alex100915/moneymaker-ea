@@ -1,7 +1,7 @@
-#ifndef __FVG618LABEL_MQH__
-#define __FVG618LABEL_MQH__
+#ifndef __FVG618_MQH__
+#define __FVG618_MQH__
 
-#include <MoneyMaker/Signals/FVG/FVG.mqh>
+#include "FvgTypes.mqh"
 
 bool Fvg618_IsValid618Bar(const FVG_DIRECTION fvgDirection)
 {
@@ -24,7 +24,7 @@ bool Fvg618_IsValid618Bar(const FVG_DIRECTION fvgDirection)
    return valid618Bar;
 }
 
-bool Fvg618DrawLabel(FVG_DIRECTION fvgDirection, bool valid618Bar)
+bool Fvg618_DrawLabel(FVG_DIRECTION fvgDirection, bool valid618Bar)
 {
    const datetime lastClosedBarTime = iTime(_Symbol, _Period, LAST_CLOSED_BAR_INDEX);
 
@@ -56,4 +56,4 @@ bool Fvg618DrawLabel(FVG_DIRECTION fvgDirection, bool valid618Bar)
    return true;
 }
 
-#endif // __FVG618LABEL_MQH__
+#endif // __FVG618_MQH__

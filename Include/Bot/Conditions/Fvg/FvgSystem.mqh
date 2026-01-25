@@ -1,8 +1,8 @@
 #ifndef __FVG_SYSTEM_MQH__
 #define __FVG_SYSTEM_MQH__
 
-#include <MoneyMaker/Signals/FVG/FVG.mqh>
-#include <MoneyMaker/Signals/FVG/Fvg618Label.mqh>
+#include "FvgDetector.mqh"
+#include "Fvg618.mqh"
 
 // --- active tracking state ---
 static bool g_hasActiveFvg = false;
@@ -12,7 +12,7 @@ static double g_fvgZoneHigh = 0.0;
 
 bool FvgSystem_IsFulfilled(bool draw)
 {
-   FvgDetectionResult fvgResult = Fvg_Detect();
+   FvgDetectionResult fvgResult = FvgDetector_Detect();
    
    // If NEW FVG formed -> start tracking   
    if(fvgResult.hasNewFvg)
@@ -23,18 +23,18 @@ bool FvgSystem_IsFulfilled(bool draw)
       g_hasActiveFvg = true;
 
       if(draw)
-         FvgDraw(fvgResult);
+         FvgDetector_Draw(fvgResult);
    }
 
    // If active FVG -> evaluate 0.618 on each bar until mitigated or 0.618 fulfilled
    if(g_hasActiveFvg && g_activeFvgDirection != FVG_NONE)
    {         
-      bool isFvgMitigated = FvgCheckMitigation(g_activeFvgDirection, g_fvgZoneLow, g_fvgZoneHigh);
+      bool isFvgMitigated = FvgDetector_CheckMitigation(g_activeFvgDirection, g_fvgZoneLow, g_fvgZoneHigh);
 
       if(isFvgMitigated)
       {
          if(draw)
-            Fvg618DrawMitigatedLabel(g_activeFvgDirection);
+            FvgDetector_DrawMitigatedLabel(g_activeFvgDirection);
          
          g_hasActiveFvg = false;
          g_activeFvgDirection = FVG_NONE;
@@ -46,7 +46,7 @@ bool FvgSystem_IsFulfilled(bool draw)
          bool valid618Bar = Fvg618_IsValid618Bar(g_activeFvgDirection);
 
          if(draw)
-            Fvg618DrawLabel(g_activeFvgDirection, valid618Bar);
+            Fvg618_DrawLabel(g_activeFvgDirection, valid618Bar);
 
          if(valid618Bar)
          {         

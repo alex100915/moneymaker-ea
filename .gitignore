@@ -7,4 +7,7 @@
 # Common extras (optional)
 #*~
 #*.tmp
-Experts/Advisors/FVG_Tester_Indicator.mq5
+Experts/Advisors/moneymaker.mq5
+Include/Bot/Chart/
+Include/Bot/Infra/
+Include/Bot/Conditions/Impulse/
