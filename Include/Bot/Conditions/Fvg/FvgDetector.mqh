@@ -109,14 +109,7 @@ bool FvgDetector_CheckBullishPatternWithEngulfing(const FvgBarData &barData)
    // Mid bar body must engulf left bar body + extend beyond upper wick
    bool midBodyEngulfsLeft = (barData.midBarOpen <= barData.leftBarClose) && (barData.midBarClose >= barData.leftBarHigh);
    
-   if(!(leftIsBearish && midIsBullish && rightIsBullish && midBodyEngulfsLeft))
-      return false;
-   
-   bool midBarConnectsToLeft  = (barData.midBarLow <= barData.leftBarHigh && barData.midBarLow > barData.leftBarLow);
-   bool midBarConnectsToRight = (barData.midBarHigh >= barData.rightBarLow && barData.midBarHigh < barData.rightBarHigh);
-   bool gapExistsBetweenBars  = (barData.leftBarHigh < barData.rightBarLow);
-   
-   return midBarConnectsToLeft && midBarConnectsToRight && gapExistsBetweenBars;
+   return leftIsBearish && midIsBullish && rightIsBullish && midBodyEngulfsLeft;
 }
 
 bool FvgDetector_CheckBearishPatternWithEngulfing(const FvgBarData &barData)
@@ -128,14 +121,7 @@ bool FvgDetector_CheckBearishPatternWithEngulfing(const FvgBarData &barData)
    // Mid bar body must engulf left bar body + extend beyond lower wick
    bool midBodyEngulfsLeft = (barData.midBarOpen >= barData.leftBarClose) && (barData.midBarClose <= barData.leftBarLow);
    
-   if(!(leftIsBullish && midIsBearish && rightIsBearish && midBodyEngulfsLeft))
-      return false;
-   
-   bool midBarConnectsToLeft  = (barData.midBarHigh >= barData.leftBarLow && barData.midBarHigh < barData.leftBarHigh);
-   bool midBarConnectsToRight = (barData.midBarLow <= barData.rightBarHigh && barData.midBarLow > barData.rightBarLow);
-   bool gapExistsBetweenBars  = (barData.leftBarLow > barData.rightBarHigh);
-   
-   return midBarConnectsToLeft && midBarConnectsToRight && gapExistsBetweenBars;
+   return leftIsBullish && midIsBearish && rightIsBearish && midBodyEngulfsLeft;
 }
 
 bool FvgDetector_CheckMitigation(FVG_DIRECTION direction, double zoneLow, double zoneHigh)
