@@ -12,10 +12,16 @@ struct FvgBarData
 {
    double rightBarHigh;
    double rightBarLow;
+   double rightBarOpen;
+   double rightBarClose;
    double midBarHigh;
    double midBarLow;
+   double midBarOpen;
+   double midBarClose;
    double leftBarHigh;
    double leftBarLow;
+   double leftBarOpen;
+   double leftBarClose;
 };
 
 struct FvgDetectionResult
