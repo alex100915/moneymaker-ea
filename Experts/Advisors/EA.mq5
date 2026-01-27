@@ -2,6 +2,7 @@
 #property description "Entry EA: EVENT-STYLE FVG + 0.618 system. One Draw parameter controls drawings."
 
 #include <Bot/Conditions/Fvg/FvgSystem.mqh>
+#include <Bot/Conditions/ZigZag/ZigZagSystem.mqh>
 
 const int LAST_CLOSED_BAR_INDEX = 1;  // MT5: index 0 = currently forming bar, index 1 = last closed bar
 
@@ -46,7 +47,13 @@ bool IsValidLastClosedBarData()
 int OnInit()
 {
    g_lastBarTime = 0;
+   ZigZagSystem_Init();
    return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason)
+{
+   ZigZagSystem_Deinit(DrawChart);
 }
 
 void OnTick()
@@ -62,6 +69,9 @@ void OnTick()
 
    if(!IsValidLastClosedBarData())
       return;
+
+   // ZigZag processing
+   ZigZagSystem_Process(DrawChart, LAST_CLOSED_BAR_INDEX);
 
    // Business logic
    bool fvgResult = FvgSystem_IsFulfilled(DrawChart);
