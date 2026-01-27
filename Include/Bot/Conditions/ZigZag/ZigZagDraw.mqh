@@ -3,12 +3,34 @@
 
 #include "ZigZagTypes.mqh"
 
+// Global offset calculated once per chart update
+static double g_zigzagOffset = 0;
+
+void ZigZagDraw_CalculateOffset()
+{
+   // Find highest price in last 200 bars
+   double highestPrice = 0;
+   for(int i = 0; i < 200; i++)
+   {
+      double high = iHigh(_Symbol, _Period, i);
+      if(high > highestPrice)
+         highestPrice = high;
+   }
+   
+   // Set offset to 0.2% above highest price
+   g_zigzagOffset = highestPrice * 0.002;
+}
+
 void ZigZagDraw_DrawSegment(const ZigZagSegment &segment)
 {
    string objName = "ZZ#" + TimeToString(segment.startTime) 
                     + "#" + TimeToString(segment.endTime);
    
-   if(ObjectCreate(0, objName, OBJ_TREND, 0, segment.startTime, segment.startPrice, segment.endTime, segment.endPrice))
+   // Apply the same offset to all segments to keep them connected
+   double adjustedStartPrice = segment.startPrice + g_zigzagOffset;
+   double adjustedEndPrice = segment.endPrice + g_zigzagOffset;
+   
+   if(ObjectCreate(0, objName, OBJ_TREND, 0, segment.startTime, adjustedStartPrice, segment.endTime, adjustedEndPrice))
    {
       ObjectSetInteger(0, objName, OBJPROP_COLOR, clrYellow);
       ObjectSetInteger(0, objName, OBJPROP_WIDTH, 2);

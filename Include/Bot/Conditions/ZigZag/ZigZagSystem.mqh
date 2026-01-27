@@ -12,6 +12,7 @@ void ZigZagSystem_Process(bool draw, int lastClosedBarIndex)
    {
       if(draw)
       {
+         ZigZagDraw_CalculateOffset();
          ZigZagDraw_DrawSegment(segment);
       }
    }
